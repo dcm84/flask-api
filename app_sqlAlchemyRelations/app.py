@@ -3,8 +3,6 @@ from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.sql import func
 import datetime
-
-
 from flask_migrate import Migrate
 DATABASE = "quotes.sqlite"
 
@@ -57,7 +55,7 @@ class QuoteModel(db.Model):
 #авторы
 @app.route("/author/<int:id>")
 def author_by_id(id):
-   author = AuthorModel.query.get(id)
+   author = AuthorModel.query.filter_by(is_active=True, id=id).first()
    if author is not None:
       return author.as_dict()
    else:
@@ -70,7 +68,7 @@ def authors():
    sort_by = request.args.get('sort_by')
    sort_by = sort_by if sort_by in avaible_sorts else "id"
    
-   return [i.as_dict() for i in AuthorModel.query.order_by(getattr(AuthorModel, sort_by)).all()]
+   return [i.as_dict() for i in AuthorModel.query.filter_by(is_active=True).order_by(getattr(AuthorModel, sort_by)).all()]
 
 @app.route("/author", methods=["POST"])
 def create_author():
@@ -86,7 +84,7 @@ def create_author():
 @app.route("/author/<int:id>", methods=['PUT'])
 def edit_author(id):
    #Проверяем, что есть, что редактировать
-   author = AuthorModel.query.get(id)
+   author = AuthorModel.query.filter_by(is_active=True, id=id).first()
    if author is None:
       return { "error": f"Автор не существует: {id}"}, 404
    
@@ -104,7 +102,7 @@ def edit_author(id):
 @app.route("/author/<int:id>", methods=['DELETE'])
 def delete_author(id):
    #Проверяем, что есть, что удалять
-   author = AuthorModel.query.get(id)
+   author = AuthorModel.query.filter_by(is_active=True, id=id).first()
    if author is None:
       return { "error": f"Автор не существует: {id}"}, 404
    
@@ -114,6 +112,39 @@ def delete_author(id):
 
    return f"Автор с id={id} успешно удален.", 200
 
+@app.route("/author/<int:author_id>/deactivate", methods=['PUT'])
+def deactivate_author(author_id):
+   author = AuthorModel.query.get(author_id)
+   if author is None:
+      return { "error": f"Автор не существует: {author_id}"}, 404
+
+   if author.is_active:
+      author.is_active = False
+      db.session.commit()
+   
+   return author.as_dict(), 200
+
+@app.route("/author/<int:author_id>/activate", methods=['PUT'])
+def activate_author(author_id):
+   author = AuthorModel.query.get(author_id)
+   if author is None:
+      return { "error": f"Автор не существует: {author_id}"}, 404
+
+   if not author.is_active:
+      author.is_active = True
+      db.session.commit()
+   
+   return author.as_dict(), 200
+
+@app.route("/author/deleted")
+def deleted_authors():
+   deleted_authors = []
+   for i in AuthorModel.query.filter_by(is_active=False).all():
+      d = i.as_dict()
+      d["activate_url"] = "/author/" + str(d["id"]) + "/activate"
+      deleted_authors.append(d)
+   return deleted_authors
+
 #цитаты
 @app.route("/quotes")
 def quote():
@@ -122,7 +153,7 @@ def quote():
 @app.route("/author/<int:author_id>/quotes/<int:quote_id>")
 def quote_by_id(author_id, quote_id):
 
-   author = AuthorModel.query.get(author_id)
+   author = AuthorModel.query.filter_by(is_active=True, id=author_id).first()
    if author is None:
       return { "error": f"Автор не существует: {author_id}"}, 404
 
@@ -135,7 +166,7 @@ def quote_by_id(author_id, quote_id):
 @app.route("/author/<int:author_id>/quotes")
 def quote_by_author(author_id):
 
-   author = AuthorModel.query.get(author_id)
+   author = AuthorModel.query.filter_by(is_active=True, id=author_id).first()
    if author is None:
       return { "error": f"Автор не существует: {author_id}"}, 404
 
@@ -144,7 +175,7 @@ def quote_by_author(author_id):
 
 @app.route("/author/<int:author_id>/quotes", methods=["POST"])
 def create_quote(author_id):
-   author = AuthorModel.query.get(author_id)
+   author = AuthorModel.query.filter_by(is_active=True, id=author_id).first()
    if author is None:
       return { "error": f"Автор не существует: {author_id}"}, 404
 
@@ -160,7 +191,7 @@ def create_quote(author_id):
 @app.route("/author/<int:author_id>/quotes/<int:quote_id>", methods=['PUT'])
 def edit_quote(author_id, quote_id):
    #Проверяем, что есть, что редактировать
-   author = AuthorModel.query.get(author_id)
+   author = AuthorModel.query.filter_by(is_active=True, id=author_id).first()
    if author is None:
       return { "error": f"Автор не существует: {author_id}"}, 404
 
@@ -182,7 +213,7 @@ def edit_quote(author_id, quote_id):
 @app.route("/author/<int:author_id>/quotes/<int:quote_id>", methods=['DELETE'])
 def delete_quote(author_id, quote_id):
    #Проверяем, что есть, что удалять
-   author = AuthorModel.query.get(author_id)
+   author = AuthorModel.query.filter_by(is_active=True, id=author_id).first()
    if author is None:
       return { "error": f"Автор не существует: {author_id}"}, 404
 
@@ -198,7 +229,7 @@ def delete_quote(author_id, quote_id):
 
 @app.route("/author/<int:author_id>/quotes/<int:quote_id>/increase_rating", methods=['PUT'])
 def increase_quote_rating(author_id, quote_id):
-   author = AuthorModel.query.get(author_id)
+   author = AuthorModel.query.filter_by(is_active=True, id=author_id).first()
    if author is None:
       return { "error": f"Автор не существует: {author_id}"}, 404
 
@@ -214,7 +245,7 @@ def increase_quote_rating(author_id, quote_id):
 
 @app.route("/author/<int:author_id>/quotes/<int:quote_id>/decrease_rating", methods=['PUT'])
 def decrease_quote_rating(author_id, quote_id):
-   author = AuthorModel.query.get(author_id)
+   author = AuthorModel.query.filter_by(is_active=True, id=author_id).first()
    if author is None:
       return { "error": f"Автор не существует: {author_id}"}, 404
 
